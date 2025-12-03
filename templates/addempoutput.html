@@ -1,8 +1,26 @@
 <!DOCTYPE html>
 <html>
-<head><title>Added</title></head>
-<body style="background-image: url('{{ url_for('static', filename=bg_image_path) }}'); background-size: cover;">
-  <div style="background: rgba(255,255,255,0.9); padding:20px; margin:40px auto; width:400px; text-align:center;">
+<head>
+  <title>Added</title>
+  <style>
+    body { 
+        background-image: url("{{ url_for('static', filename=bg_image_path) }}"); 
+        background-size: cover; 
+        font-family: Avenir, sans-serif;
+    }
+    .container {
+        background: rgba(255,255,255,0.9); 
+        padding: 20px; 
+        margin: 40px auto; 
+        width: 400px; 
+        text-align: center;
+        border-radius: 8px;
+        box-sizing: border-box; /* Fixes the width warning */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
     <h2>The employee {{ name }} was successfully added</h2>
     <p><a href="/">Back</a></p>
   </div>

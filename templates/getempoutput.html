@@ -1,8 +1,25 @@
 <!DOCTYPE html>
 <html>
-<head><title>Employee</title></head>
-<body style="background-image: url('{{ url_for('static', filename=bg_image_path) }}'); background-size: cover;">
-  <div style="background: rgba(255,255,255,0.9); padding:20px; margin:40px auto; width:420px;">
+<head>
+  <title>Employee</title>
+  <style>
+    body { 
+        background-image: url("{{ url_for('static', filename=bg_image_path) }}"); 
+        background-size: cover; 
+        font-family: Avenir, sans-serif;
+    }
+    .container {
+        background: rgba(255,255,255,0.9); 
+        padding: 20px; 
+        margin: 40px auto; 
+        width: 420px;
+        border-radius: 8px;
+        box-sizing: border-box; /* Fixes the width warning */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
     {% if id %}
       <p><strong>ID:</strong> {{ id }}</p>
       <p><strong>First:</strong> {{ fname }}</p>

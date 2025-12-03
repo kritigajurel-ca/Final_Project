@@ -8,67 +8,72 @@ from botocore.exceptions import ClientError
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# ---------- Configuration (from env / ConfigMap / Secret) ----------
+# ---------- Configuration ----------
+# Database Config
 DBHOST = os.environ.get("DBHOST", "localhost")
 DBUSER = os.environ.get("DBUSER", "root")
 DBPWD  = os.environ.get("DBPWD", "password")
 DATABASE = os.environ.get("DATABASE", "employees")
 DBPORT = int(os.environ.get("DBPORT", 3306))
 
+# App Config
 APP_HEADER = os.environ.get("APP_HEADER", "Group10")
-# ConfigMap will supply BACKGROUND_IMAGE (s3://bucket/key OR static/images/filename)
-BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE", "static/images/blue-oil-paint-textured-background.jpg")
 
-# Local static image target (Flask serves /static)
-LOCAL_STATIC_DIR = "static/images"
-LOCAL_FILENAME = os.path.basename(BACKGROUND_IMAGE) if not BACKGROUND_IMAGE.lower().startswith("s3://") else "blue-oil-paint-textured-background.jpg"
-LOCAL_IMAGE_PATH = os.path.join(LOCAL_STATIC_DIR, LOCAL_FILENAME)
-os.makedirs(LOCAL_STATIC_DIR, exist_ok=True)
+# --- S3 Configuration (Updated for your requirements) ---
+# We default to the bucket and image you specified.
+# You can still override these using Environment Variables in Kubernetes later if needed.
+S3_BUCKET = os.environ.get("S3_BUCKET", "applications3buckect")
+S3_IMAGE_KEY = os.environ.get("S3_IMAGE_KEY", "20210116_155141.jpg")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 
-# ---------- S3 download (best-effort) ----------
-def fetch_from_s3_if_needed(url):
-    if not url or not url.lower().startswith("s3://"):
-        logging.info("Using local background image path: %s", url)
-        return False
-    s3_path = url[len("s3://"):]
-    parts = s3_path.split("/", 1)
-    if len(parts) != 2:
-        logging.error("Invalid S3 path: %s", url)
-        return False
-    bucket, key = parts
-    logging.info("Attempting S3 download: s3://%s/%s", bucket, key)
-    try:
-        s3 = boto3.client("s3")
-        s3.download_file(bucket, key, LOCAL_IMAGE_PATH)
-        logging.info("Downloaded background to %s", LOCAL_IMAGE_PATH)
-        return True
-    except ClientError as e:
-        logging.error("S3 ClientError: %s", e)
-        return False
-    except Exception as e:
-        logging.error("S3 error: %s", e)
-        return False
+# Local storage setup
+# We save the downloaded file as 'bg.jpg' so HTML/CSS always looks for the same name
+# regardless of what the file is named in S3.
+LOCAL_STATIC_DIR = "static"
+LOCAL_IMAGE_NAME = "bg.jpg"
+LOCAL_IMAGE_PATH = os.path.join(LOCAL_STATIC_DIR, LOCAL_IMAGE_NAME)
 
-fetched = fetch_from_s3_if_needed(BACKGROUND_IMAGE)
-if fetched:
-    BG_PATH_FOR_TEMPLATE = "images/" + LOCAL_FILENAME
-else:
-    if BACKGROUND_IMAGE.startswith("static/"):
-        BG_PATH_FOR_TEMPLATE = BACKGROUND_IMAGE[len("static/"):]
-    elif BACKGROUND_IMAGE.startswith("images/"):
-        BG_PATH_FOR_TEMPLATE = BACKGROUND_IMAGE
+# Ensure static folder exists
+if not os.path.exists(LOCAL_STATIC_DIR):
+    os.makedirs(LOCAL_STATIC_DIR)
+
+# ---------- S3 Download Logic ----------
+def download_background_image():
+    """
+    Attempts to download the specific image from the specific S3 bucket.
+    """
+    if S3_BUCKET and S3_IMAGE_KEY:
+        logging.info(f"Attempting download: s3://{S3_BUCKET}/{S3_IMAGE_KEY}")
+        try:
+            s3 = boto3.client('s3', region_name=AWS_REGION)
+            s3.download_file(S3_BUCKET, S3_IMAGE_KEY, LOCAL_IMAGE_PATH)
+            logging.info(f"Successfully downloaded to {LOCAL_IMAGE_PATH}")
+            return True
+        except ClientError as e:
+            logging.error(f"S3 ClientError (Permission/Missing File): {e}")
+        except Exception as e:
+            logging.error(f"S3 General Error: {e}")
     else:
-        BG_PATH_FOR_TEMPLATE = "images/" + LOCAL_FILENAME
+        logging.warning("S3_BUCKET or S3_IMAGE_KEY not set.")
+    
+    return False
 
-logging.info("Background used in templates: %s", BG_PATH_FOR_TEMPLATE)
+# Trigger download on app startup
+is_downloaded = download_background_image()
 
-# ---------- Database connection (best-effort) ----------
+# Set the path that HTML templates will use
+# If download worked, use 'bg.jpg'. If not, fallback to a default if you have one, or keep it empty.
+BG_PATH_FOR_TEMPLATE = LOCAL_IMAGE_NAME if is_downloaded else "default-bg.jpg" 
+
+logging.info(f"Background image to be served: static/{BG_PATH_FOR_TEMPLATE}")
+
+# ---------- Database Connection ----------
 db_conn = None
 try:
     db_conn = connections.Connection(host=DBHOST, port=DBPORT, user=DBUSER, password=DBPWD, db=DATABASE)
     logging.info("Database connected successfully.")
 except Exception as e:
-    logging.error("Database connection failed: %s", e)
+    logging.error(f"Database connection failed: {e}")
     db_conn = None
 
 # ---------- Routes ----------
@@ -96,7 +101,7 @@ def AddEmp():
             cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
             db_conn.commit()
         except Exception as e:
-            logging.error("Insert error: %s", e)
+            logging.error(f"Insert error: {e}")
         finally:
             cursor.close()
 
@@ -125,9 +130,9 @@ def FetchData():
                     "location": result[4]
                 }
             else:
-                logging.info("No employee found for id: %s", emp_id)
+                logging.info(f"No employee found for id: {emp_id}")
         except Exception as e:
-            logging.error("Fetch error: %s", e)
+            logging.error(f"Fetch error: {e}")
         finally:
             cursor.close()
 

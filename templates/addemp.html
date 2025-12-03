@@ -3,8 +3,19 @@
 <head>
   <title>Add Employee</title>
   <style>
-    body { background-image: url("{{ url_for('static', filename=bg_image_path) }}"); background-size: cover; font-family: Avenir, sans-serif; }
-    .card { background: rgba(255,255,255,0.85); padding: 20px; margin: 40px auto; width: 420px; border-radius: 8px; }
+    body { 
+        background-image: url("{{ url_for('static', filename=bg_image_path) }}"); 
+        background-size: cover; 
+        font-family: Avenir, sans-serif; 
+    }
+    .card { 
+        background: rgba(255,255,255,0.85); 
+        padding: 20px; 
+        margin: 40px auto; 
+        width: 420px; 
+        border-radius: 8px;
+        box-sizing: border-box; /* Fixes the width warning */
+    }
   </style>
 </head>
 <body>
