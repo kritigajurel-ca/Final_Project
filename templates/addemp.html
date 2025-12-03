@@ -1,36 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title>Add Employee Information</title>
+  <title>Add Employee</title>
+  <style>
+    body { background-image: url("{{ url_for('static', filename=bg_image_path) }}"); background-size: cover; font-family: Avenir, sans-serif; }
+    .card { background: rgba(255,255,255,0.85); padding: 20px; margin: 40px auto; width: 420px; border-radius: 8px; }
+  </style>
 </head>
-<center>
-	<font color="black" size="4" style="font-family: avenir">
-
-		<h1 style="color: DodgerBlue">Employee Database</h1>
-		<body style="background: {{ color }};" >
-
-			<form action="/addemp" autocomplete="on" method = "POST" enctype="multipart/form-data">
-
-			
-
-		  		Employee ID:<br> <input style="height:25px;font-size:14pt; color:grey;" type="number" name="emp_id" autofocus size="40"><br><br>
-
-		  		First Name:<br> <input style="height:25px;font-size:14pt;color:grey;" type="text" name="first_name" ><br><br>
-
-		  		Last Name:<br> <input style="height:25px;font-size:14pt;color:grey;" type="text" name="last_name"><br><br>
-
-		  		Primary Skills:<br> <input style="height:25px;font-size:14pt;color:grey;" type="text" name="primary_skill"><br><br>
-
-		  		Location:<br> <input style="height:25px;font-size:14pt;color:grey;" type="text" name="location"><br><br>
-
-		  		<button type="submit" style="background: grey; height: 45px; width: 200px; color: white; size: 5; font:oblique;">UPDATE DATABASE</button><br><br>
-		  		<button type="submit" formaction="/getemp" style="background: grey; height: 45px; width: 200px; color:white; font:oblique;">GET EMPLOYEE INFORMATION</button><br><br>
-
-			</form>
-			<br><br><br><br><br><br><br><br>
-            <a href="/about">About Us</a>
-		</body>
-
-	</font>
-</center>
+<body>
+  <div class="card">
+    <h2>Employee Database - {{ header }}</h2>
+    <form action="/addemp" method="POST">
+      <label>Employee ID</label><br><input name="emp_id" required><br><br>
+      <label>First Name</label><br><input name="first_name" required><br><br>
+      <label>Last Name</label><br><input name="last_name" required><br><br>
+      <label>Primary Skill</label><br><input name="primary_skill"><br><br>
+      <label>Location</label><br><input name="location"><br><br>
+      <button type="submit">Add Employee</button>
+      <button formaction="/getemp" formmethod="get">Get Employee</button>
+    </form>
+    <p><a href="/about">About</a></p>
+  </div>
+</body>
 </html>

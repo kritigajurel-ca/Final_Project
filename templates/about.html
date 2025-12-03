@@ -1,20 +1,17 @@
-<!doctype html>
-<title>Hello from Flask</title>
-<body style="background: {{ color }};"></body>
-<div style="color: #e4e4e4;
-    text-align:  center;
-    height: 90px;
-    vertical-align:  middle;">
-{% if name %}
-  <h1>Hello from {{ name }}!</h1>
-{% else %}
-  <h1>Hello From CLO835!</h1>
-{% endif %}
-
-  {% if contents %}
-  <textarea rows="10" cols="50">
-    {{ contents }}
-  </textarea>
-  {% endif %}
-
-</div>
+<!DOCTYPE html>
+<html>
+<head>
+  <title>About</title>
+  <style>
+    body { background-image: url("{{ url_for('static', filename=bg_image_path) }}"); background-size: cover; font-family: Avenir, sans-serif; color:#fff; text-align:center; padding-top:60px; }
+    .panel { background: rgba(0,0,0,0.5); display:inline-block; padding:20px; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>Hello from {{ header }}</h1>
+    <p>Simple Flask + MySQL app for CLO835.</p>
+    <p><a href="/">Home</a></p>
+  </div>
+</body>
+</html>

@@ -1,136 +1,144 @@
 from flask import Flask, render_template, request
 from pymysql import connections
 import os
-import random
-import argparse
-
+import logging
+import boto3
+from botocore.exceptions import ClientError
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-DBHOST = os.environ.get("DBHOST") or "localhost"
-DBUSER = os.environ.get("DBUSER") or "root"
-DBPWD = os.environ.get("DBPWD") or "passwors"
-DATABASE = os.environ.get("DATABASE") or "employees"
-COLOR_FROM_ENV = os.environ.get('APP_COLOR') or "lime"
-DBPORT = int(os.environ.get("DBPORT"))
+# ---------- Configuration (from env / ConfigMap / Secret) ----------
+DBHOST = os.environ.get("DBHOST", "localhost")
+DBUSER = os.environ.get("DBUSER", "root")
+DBPWD  = os.environ.get("DBPWD", "password")
+DATABASE = os.environ.get("DATABASE", "employees")
+DBPORT = int(os.environ.get("DBPORT", 3306))
 
-# Create a connection to the MySQL database
-db_conn = connections.Connection(
-    host= DBHOST,
-    port=DBPORT,
-    user= DBUSER,
-    password= DBPWD, 
-    db= DATABASE
-    
-)
-output = {}
-table = 'employee';
+APP_HEADER = os.environ.get("APP_HEADER", "Group10")
+# ConfigMap will supply BACKGROUND_IMAGE (s3://bucket/key OR static/images/filename)
+BACKGROUND_IMAGE = os.environ.get("BACKGROUND_IMAGE", "static/images/blue-oil-paint-textured-background.jpg")
 
-# Define the supported color codes
-color_codes = {
-    "red": "#e74c3c",
-    "green": "#16a085",
-    "blue": "#89CFF0",
-    "blue2": "#30336b",
-    "pink": "#f4c2c2",
-    "darkblue": "#130f40",
-    "lime": "#C1FF9C",
-}
+# Local static image target (Flask serves /static)
+LOCAL_STATIC_DIR = "static/images"
+LOCAL_FILENAME = os.path.basename(BACKGROUND_IMAGE) if not BACKGROUND_IMAGE.lower().startswith("s3://") else "blue-oil-paint-textured-background.jpg"
+LOCAL_IMAGE_PATH = os.path.join(LOCAL_STATIC_DIR, LOCAL_FILENAME)
+os.makedirs(LOCAL_STATIC_DIR, exist_ok=True)
 
+# ---------- S3 download (best-effort) ----------
+def fetch_from_s3_if_needed(url):
+    if not url or not url.lower().startswith("s3://"):
+        logging.info("Using local background image path: %s", url)
+        return False
+    s3_path = url[len("s3://"):]
+    parts = s3_path.split("/", 1)
+    if len(parts) != 2:
+        logging.error("Invalid S3 path: %s", url)
+        return False
+    bucket, key = parts
+    logging.info("Attempting S3 download: s3://%s/%s", bucket, key)
+    try:
+        s3 = boto3.client("s3")
+        s3.download_file(bucket, key, LOCAL_IMAGE_PATH)
+        logging.info("Downloaded background to %s", LOCAL_IMAGE_PATH)
+        return True
+    except ClientError as e:
+        logging.error("S3 ClientError: %s", e)
+        return False
+    except Exception as e:
+        logging.error("S3 error: %s", e)
+        return False
 
-# Create a string of supported colors
-SUPPORTED_COLORS = ",".join(color_codes.keys())
+fetched = fetch_from_s3_if_needed(BACKGROUND_IMAGE)
+if fetched:
+    BG_PATH_FOR_TEMPLATE = "images/" + LOCAL_FILENAME
+else:
+    if BACKGROUND_IMAGE.startswith("static/"):
+        BG_PATH_FOR_TEMPLATE = BACKGROUND_IMAGE[len("static/"):]
+    elif BACKGROUND_IMAGE.startswith("images/"):
+        BG_PATH_FOR_TEMPLATE = BACKGROUND_IMAGE
+    else:
+        BG_PATH_FOR_TEMPLATE = "images/" + LOCAL_FILENAME
 
-# Generate a random color
-COLOR = random.choice(["red", "green", "blue", "blue2", "darkblue", "pink", "lime"])
+logging.info("Background used in templates: %s", BG_PATH_FOR_TEMPLATE)
 
+# ---------- Database connection (best-effort) ----------
+db_conn = None
+try:
+    db_conn = connections.Connection(host=DBHOST, port=DBPORT, user=DBUSER, password=DBPWD, db=DATABASE)
+    logging.info("Database connected successfully.")
+except Exception as e:
+    logging.error("Database connection failed: %s", e)
+    db_conn = None
 
-@app.route("/", methods=['GET', 'POST'])
+# ---------- Routes ----------
+@app.route("/", methods=['GET'])
 def home():
-    return render_template('addemp.html', color=color_codes[COLOR])
+    return render_template('addemp.html', header=APP_HEADER, bg_image_path=BG_PATH_FOR_TEMPLATE)
 
-@app.route("/about", methods=['GET','POST'])
+@app.route("/about", methods=['GET'])
 def about():
-    return render_template('about.html', color=color_codes[COLOR])
-    
+    return render_template('about.html', header=APP_HEADER, bg_image_path=BG_PATH_FOR_TEMPLATE)
+
 @app.route("/addemp", methods=['POST'])
 def AddEmp():
-    emp_id = request.form['emp_id']
-    first_name = request.form['first_name']
-    last_name = request.form['last_name']
-    primary_skill = request.form['primary_skill']
-    location = request.form['location']
+    emp_id = request.form.get('emp_id')
+    first_name = request.form.get('first_name')
+    last_name = request.form.get('last_name')
+    primary_skill = request.form.get('primary_skill')
+    location = request.form.get('location')
+    emp_name = f"{first_name} {last_name}"
 
-  
-    insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
-    cursor = db_conn.cursor()
+    if db_conn:
+        try:
+            cursor = db_conn.cursor()
+            insert_sql = "INSERT INTO employee VALUES (%s, %s, %s, %s, %s)"
+            cursor.execute(insert_sql, (emp_id, first_name, last_name, primary_skill, location))
+            db_conn.commit()
+        except Exception as e:
+            logging.error("Insert error: %s", e)
+        finally:
+            cursor.close()
 
-    try:
-        
-        cursor.execute(insert_sql,(emp_id, first_name, last_name, primary_skill, location))
-        db_conn.commit()
-        emp_name = "" + first_name + " " + last_name
+    return render_template('addempoutput.html', name=emp_name, header=APP_HEADER, bg_image_path=BG_PATH_FOR_TEMPLATE)
 
-    finally:
-        cursor.close()
-
-    print("all modification done...")
-    return render_template('addempoutput.html', name=emp_name, color=color_codes[COLOR])
-
-@app.route("/getemp", methods=['GET', 'POST'])
+@app.route("/getemp", methods=['GET'])
 def GetEmp():
-    return render_template("getemp.html", color=color_codes[COLOR])
+    return render_template('getemp.html', header=APP_HEADER, bg_image_path=BG_PATH_FOR_TEMPLATE)
 
-
-@app.route("/fetchdata", methods=['GET','POST'])
+@app.route("/fetchdata", methods=['POST'])
 def FetchData():
-    emp_id = request.form['emp_id']
-
+    emp_id = request.form.get('emp_id')
     output = {}
-    select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location from employee where emp_id=%s"
-    cursor = db_conn.cursor()
+    if db_conn:
+        try:
+            cursor = db_conn.cursor()
+            select_sql = "SELECT emp_id, first_name, last_name, primary_skill, location FROM employee WHERE emp_id=%s"
+            cursor.execute(select_sql, (emp_id,))
+            result = cursor.fetchone()
+            if result:
+                output = {
+                    "emp_id": result[0],
+                    "first_name": result[1],
+                    "last_name": result[2],
+                    "primary_skills": result[3],
+                    "location": result[4]
+                }
+            else:
+                logging.info("No employee found for id: %s", emp_id)
+        except Exception as e:
+            logging.error("Fetch error: %s", e)
+        finally:
+            cursor.close()
 
-    try:
-        cursor.execute(select_sql,(emp_id))
-        result = cursor.fetchone()
-        
-        # Add No Employee found form
-        output["emp_id"] = result[0]
-        output["first_name"] = result[1]
-        output["last_name"] = result[2]
-        output["primary_skills"] = result[3]
-        output["location"] = result[4]
-        
-    except Exception as e:
-        print(e)
-
-    finally:
-        cursor.close()
-
-    return render_template("getempoutput.html", id=output["emp_id"], fname=output["first_name"],
-                           lname=output["last_name"], interest=output["primary_skills"], location=output["location"], color=color_codes[COLOR])
+    return render_template('getempoutput.html',
+                           id=output.get("emp_id"),
+                           fname=output.get("first_name"),
+                           lname=output.get("last_name"),
+                           interest=output.get("primary_skills"),
+                           location=output.get("location"),
+                           header=APP_HEADER,
+                           bg_image_path=BG_PATH_FOR_TEMPLATE)
 
 if __name__ == '__main__':
-    
-    # Check for Command Line Parameters for color
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--color', required=False)
-    args = parser.parse_args()
-
-    if args.color:
-        print("Color from command line argument =" + args.color)
-        COLOR = args.color
-        if COLOR_FROM_ENV:
-            print("A color was set through environment variable -" + COLOR_FROM_ENV + ". However, color from command line argument takes precendence.")
-    elif COLOR_FROM_ENV:
-        print("No Command line argument. Color from environment variable =" + COLOR_FROM_ENV)
-        COLOR = COLOR_FROM_ENV
-    else:
-        print("No command line argument or environment variable. Picking a Random Color =" + COLOR)
-
-    # Check if input color is a supported one
-    if COLOR not in color_codes:
-        print("Color not supported. Received '" + COLOR + "' expected one of " + SUPPORTED_COLORS)
-        exit(1)
-
-    app.run(host='0.0.0.0',port=8080,debug=True)
+    app.run(host='0.0.0.0', port=81, debug=True)

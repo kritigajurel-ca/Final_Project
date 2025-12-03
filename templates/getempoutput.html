@@ -1,35 +1,18 @@
 <!DOCTYPE html>
 <html>
-<head>
-	<title>Employee Information</title>
-</head>
-<center>
-	<font color="black" size="5" style="font-family: avenir">
-
-		<h1 style="color: DodgerBlue">Employee Information</h1>
-
-		<body style="background: {{ color }};">
-
-			<form>
-
-				<div>
-
-			  		Employee ID:<br> {{ id }} <br><br>
-
-			  		First Name:<br> {{ fname }} <br><br>
-
-			  		Last Name:<br> {{ lname }} <br><br>
-
-			  		Primary Interest:<br> {{ interest }} <br><br>
-
-			  		Location:<br> {{ location }} <br><br>
-			  		
-			  	</div>
-
-			</form>
-			<a href="{{ url_for('home') }}">Back</a>
-		</body>
-
-	</font>
-</center>
+<head><title>Employee</title></head>
+<body style="background-image: url('{{ url_for('static', filename=bg_image_path) }}'); background-size: cover;">
+  <div style="background: rgba(255,255,255,0.9); padding:20px; margin:40px auto; width:420px;">
+    {% if id %}
+      <p><strong>ID:</strong> {{ id }}</p>
+      <p><strong>First:</strong> {{ fname }}</p>
+      <p><strong>Last:</strong> {{ lname }}</p>
+      <p><strong>Skill:</strong> {{ interest }}</p>
+      <p><strong>Location:</strong> {{ location }}</p>
+    {% else %}
+      <p>Employee not found.</p>
+    {% endif %}
+    <p><a href="/">Home</a></p>
+  </div>
+</body>
 </html>
